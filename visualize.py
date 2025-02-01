@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 # Load keypoints with depth
-landmarks_df = pd.read_csv("facial_keypoints_with_depth.csv")
+landmarks_df = pd.read_csv("facial_keypoints.csv")
 
 # Extract first frame keypoints
 frame_keypoints = landmarks_df[landmarks_df["Frame"] ==100][["X", "Y", "Z"]].values
