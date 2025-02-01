@@ -54,6 +54,16 @@ cap.release()
 columns = ["Frame", "Landmark_ID", "X", "Y", "Z"]
 landmarks_df = pd.DataFrame(landmarks_list, columns=columns)
 
+#Normalize
+x_min, x_max = landmarks_df["X"].min(), landmarks_df["X"].max()
+landmarks_df["X"] = (landmarks_df["X"] - x_min) / (x_max - x_min)
+
+y_min, y_max = landmarks_df["Y"].min(), landmarks_df["Y"].max()
+landmarks_df["Y"] = (landmarks_df["Y"] - y_min) / (y_max - y_min)
+
+z_min, z_max = landmarks_df["Z"].min(), landmarks_df["Z"].max()
+landmarks_df["Z"] = (landmarks_df["Z"] - z_min) / (z_max - z_min)
+
 # Save to CSV
 landmarks_df.to_csv("facial_keypoints.csv", index=False)
 

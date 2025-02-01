@@ -71,6 +71,8 @@ cap.release()
 columns = ["Frame", "Landmark_ID", "X", "Y", "Z"]
 updated_landmarks_df = pd.DataFrame(updated_landmarks, columns=columns)
 
+
+
 # Save to CSV
 updated_landmarks_df.to_csv("facial_keypoints_with_depth.csv", index=False)
 

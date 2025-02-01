@@ -19,15 +19,15 @@ def estimate_fundamental_matrix(pts1, pts2):
     return F, mask
 
 # Select two consecutive frames for SfM
-frame1 = df[df["frame"] == 0][["x", "y"]].values
-frame2 = df[df["frame"] == 1][["x", "y"]].values
+frame1 = df[df["Frame"] == 0][["X", "Y"]].values
+frame2 = df[df["Frame"] == 1][["X", "Y"]].values
 
 # Compute Fundamental Matrix
 F, mask = estimate_fundamental_matrix(frame1, frame2)
 print("Fundamental Matrix:\n", F)
 
-K = np.array([[1000, 0, 320],  # Focal length & principal point (example) TO CHANGE THIS PART
-              [0, 1000, 240],
+K = np.array([[480, 0, 240],
+              [0, 480, 426],
               [0, 0, 1]])
 
 E = K.T @ F @ K  # Essential Matrix
@@ -65,7 +65,7 @@ def triangulate_points(K, R, T, pts1, pts2):
 X_3D = triangulate_points(K, R1, T, frame1, frame2)
 
 # Update depth (z) in dataframe
-df.loc[df["frame"] == 0, "z"] = X_3D[:, 2]
+df.loc[df["Frame"] == 0, "Z"] = X_3D[:, 2]
 
 #Save updated keypoints
 df.to_csv("updated_depth_keypoints.csv", index=False, header=False)
