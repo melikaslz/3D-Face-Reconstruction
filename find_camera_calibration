@@ -1,0 +1,124 @@
+import cv2
+import numpy as np
+
+video_path = "face.mp4"  # Replace with your video file path
+
+# --- Step 1: Read Frames with Optional Frame Skipping for Better Parallax ---
+cap = cv2.VideoCapture(video_path)
+ret, frame1 = cap.read()
+if not ret:
+    raise ValueError("Could not read the first frame from the video.")
+
+# Optionally, skip a few frames to increase the baseline (adjust as needed)
+skip_frames = 10
+for _ in range(skip_frames):
+    cap.read()
+
+ret, frame2 = cap.read()
+if not ret:
+    raise ValueError("Could not read the second frame from the video.")
+cap.release()
+
+gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+
+# --- Step 2: Feature Detection and Matching ---
+orb = cv2.ORB_create(nfeatures=2000)
+bf = cv2.BFMatcher(cv2.NORM_HAMMING)
+
+kp1, des1 = orb.detectAndCompute(gray1, None)
+kp2, des2 = orb.detectAndCompute(gray2, None)
+print("Keypoints in frame1:", len(kp1))
+print("Keypoints in frame2:", len(kp2))
+
+if des1 is None or des2 is None:
+    raise ValueError("No descriptors found in one of the frames.")
+
+# Use knnMatch and a ratio test to filter matches
+raw_matches = bf.knnMatch(des1, des2, k=2)
+good_matches = []
+for m, n in raw_matches:
+    if m.distance < 0.75 * n.distance:
+        good_matches.append(m)
+        
+print("Good matches found:", len(good_matches))
+if len(good_matches) < 8:
+    raise ValueError("Not enough good matches for pose estimation.")
+
+# Extract matching points
+pts1 = np.float32([kp1[m.queryIdx].pt for m in good_matches])
+pts2 = np.float32([kp2[m.trainIdx].pt for m in good_matches])
+
+# --- Step 3: Assume an Initial Guess for Intrinsics ---
+h, w = gray1.shape
+focal_length = w  # Rough heuristic; adjust if you have better estimates.
+K = np.array([[focal_length, 0, w / 2],
+              [0, focal_length, h / 2],
+              [0, 0, 1]], dtype=np.float64)
+print("Assumed intrinsic matrix (K):\n", K)
+
+# --- Step 4: Estimate Essential Matrix ---
+# You can try increasing the threshold if needed.
+E, mask = cv2.findEssentialMat(pts1, pts2, K, method=cv2.RANSAC, prob=0.999, threshold=2.0)
+if E is None:
+    raise ValueError("Essential matrix estimation failed.")
+
+print("Estimated Essential Matrix:\n", E)
+print("Mask from findEssentialMat (first 20 values):\n", mask.ravel()[:20])
+
+# --- Step 5: Recover Pose ---
+retval, R, t, mask_pose = cv2.recoverPose(E, pts1, pts2, K)
+print("Recovered pose mask (first 20 values):\n", mask_pose.ravel()[:20])
+num_inliers = np.count_nonzero(mask_pose)
+print("Number of inliers after recoverPose:", num_inliers)
+if num_inliers < 8:
+    raise ValueError("Not enough inlier points for triangulation.")
+
+# --- Step 6: Filter Inlier Points for Triangulation ---
+inlier_pts1 = pts1[mask_pose.ravel() == 1]
+inlier_pts2 = pts2[mask_pose.ravel() == 1]
+print("Inlier points count:", inlier_pts1.shape[0])
+
+# Ensure there are indeed points before proceeding
+if inlier_pts1.shape[0] == 0 or inlier_pts2.shape[0] == 0:
+    raise ValueError("After filtering, no inlier points remain for triangulation.")
+
+# Prepare points in the required shape (2, N)
+pts1_triang = inlier_pts1.T  # shape (2, N)
+pts2_triang = inlier_pts2.T  # shape (2, N)
+
+pts1_triang = np.ascontiguousarray(pts1_triang, dtype=np.float64)
+pts2_triang = np.ascontiguousarray(pts2_triang, dtype=np.float64)
+
+# --- Step 7: Build Projection Matrices and Triangulate ---
+P1 = K @ np.hstack((np.eye(3), np.zeros((3, 1))))
+P2 = K @ np.hstack((R, t))
+print("Projection matrix P1:\n", P1)
+print("Projection matrix P2:\n", P2)
+
+points4D = cv2.triangulatePoints(P1, P2, pts1_triang, pts2_triang)
+if points4D.shape[1] == 0:
+    raise ValueError("Triangulation failed, no points were returned.")
+
+points3D = points4D / points4D[3]  # Convert from homogeneous coordinates
+points3D = points3D[:3].T  # shape (N, 3)
+
+# --- Step 8: Reprojection Error Calculation ---
+def compute_reprojection_error(points_3d, image_points, rvec, tvec, K):
+    projected_pts, _ = cv2.projectPoints(points_3d, rvec, tvec, K, None)
+    projected_pts = projected_pts.reshape(-1, 2)
+    error = np.linalg.norm(image_points - projected_pts, axis=1)
+    return np.mean(error)
+
+# For frame1 (identity pose)
+rvec1 = np.zeros((3, 1), dtype=np.float64)
+tvec1 = np.zeros((3, 1), dtype=np.float64)
+error1 = compute_reprojection_error(points3D, inlier_pts1, rvec1, tvec1, K)
+
+# For frame2 (using recovered pose)
+rvec2, _ = cv2.Rodrigues(R)
+tvec2 = t
+error2 = compute_reprojection_error(points3D, inlier_pts2, rvec2, tvec2, K)
+
+print("\nReprojection error for frame1: {:.4f} pixels".format(error1))
+print("Reprojection error for frame2: {:.4f} pixels".format(error2))
