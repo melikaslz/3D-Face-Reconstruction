@@ -7,9 +7,6 @@ import pandas as pd
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True)
 
-print(mp_face_mesh)
-print("_____________")
-print(face_mesh)
 # Open video file
 video_path = "face.mp4"  # Change to your video path
 cap = cv2.VideoCapture(video_path)

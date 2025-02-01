@@ -6,7 +6,7 @@ import numpy as np
 landmarks_df = pd.read_csv("facial_keypoints_with_depth.csv")
 
 # Extract first frame keypoints
-frame_keypoints = landmarks_df[landmarks_df["Frame"] ==60][["X", "Y", "Z"]].values
+frame_keypoints = landmarks_df[landmarks_df["Frame"] ==100][["X", "Y", "Z"]].values
 
 # Convert to Open3D point cloud format
 pcd = o3d.geometry.PointCloud()
